@@ -1,3 +1,4 @@
+"""设备模型模块"""
 from .base import db, BaseModel
 
 class Device(db.Model, BaseModel):
@@ -15,7 +16,7 @@ class Device(db.Model, BaseModel):
         """重写序列化方法，处理tags字段"""
         result = super().to_dict()
         if result['tags']:
-            result['tags'] = result['tags'].split(',')
+            result['tags'] = [tag.strip() for tag in result['tags'].split(',')]
         else:
             result['tags'] = []
         return result
