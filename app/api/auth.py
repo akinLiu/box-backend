@@ -1,7 +1,9 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.base import db
+from app.utils.response import Response
+from app.services.auth_service import AuthService
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -9,39 +11,35 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 def register():
     data = request.get_json()
     if not data or not all(k in data for k in ('username', 'email', 'password')):
-        return jsonify({'message': 'Missing required fields'}), 422
+        return Response.validation_error('缺少必要字段')
         
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'message': 'Username already exists'}), 400
-        
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'message': 'Email already exists'}), 400
-    
-    user = User(
+    user, error = AuthService.register(
         username=data['username'],
+        password=data['password'],
         email=data['email'],
-        role='user'
+        role=data.get('role', 'user')
     )
-    user.set_password(data['password'])
-    user.save()
     
-    return jsonify(user.to_dict()), 201
+    if error:
+        return Response.error(error)
+        
+    return Response.success(user.to_dict(), '注册成功')
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     if not data or not all(k in data for k in ('username', 'password')):
-        return jsonify({'message': 'Missing username or password'}), 422
+        return Response.validation_error('缺少必要字段')
     
-    user = User.query.filter_by(username=data['username']).first()
-    if user and user.check_password(data['password']):
-        access_token = create_access_token(identity=str(user.id))
-        return jsonify({
-            'token': access_token,
-            'user': user.to_dict()
-        }), 200
+    token, error = AuthService.login(
+        username=data['username'],
+        password=data['password']
+    )
     
-    return jsonify({'message': 'Invalid username or password'}), 401
+    if error:
+        return Response.error(error, 401)
+        
+    return Response.success({'token': token, 'user': User.query.filter_by(username=data['username']).first().to_dict()}, '登录成功')
 
 @auth_bp.route('/users', methods=['GET'])
 @jwt_required()
@@ -54,11 +52,18 @@ def get_users():
         print(f"Current user: {current_user}, role: {current_user.role if current_user else None}")
         
         if not current_user or current_user.role != 'admin':
-            return jsonify({'message': 'Permission denied'}), 403
+            return Response.forbidden()
         
-        result = db.session.execute(db.select(User))
-        users = result.scalars().all()
-        return jsonify([user.to_dict() for user in users]), 200
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        users, total = AuthService.get_users(page, per_page)
+        
+        return Response.success({
+            'items': [user.to_dict() for user in users],
+            'total': total,
+            'page': page,
+            'per_page': per_page
+        })
 
 @auth_bp.route('/users/<int:user_id>', methods=['PUT'])
 @jwt_required()
@@ -71,38 +76,14 @@ def update_user(user_id):
         print(f"Current user: {current_user}, role: {current_user.role if current_user else None}")
         
         if not current_user or current_user.role != 'admin':
-            return jsonify({'message': 'Permission denied'}), 403
-        
-        user = db.session.get(User, user_id)
-        if not user:
-            return jsonify({'message': 'User not found'}), 404
+            return Response.forbidden()
         
         data = request.get_json()
         if not data:
-            return jsonify({'message': 'No input data provided'}), 400
+            return Response.validation_error('没有提供更新数据')
         
-        # 检查用户名是否已存在
-        if 'username' in data:
-            existing_user = User.query.filter(
-                User.username == data['username'],
-                User.id != user_id
-            ).first()
-            if existing_user:
-                return jsonify({'message': 'Username already exists'}), 400
-            user.username = data['username']
+        user, error = AuthService.update_user(user_id, data)
+        if error:
+            return Response.error(error)
             
-        # 检查邮箱是否已存在
-        if 'email' in data:
-            existing_user = User.query.filter(
-                User.email == data['email'],
-                User.id != user_id
-            ).first()
-            if existing_user:
-                return jsonify({'message': 'Email already exists'}), 400
-            user.email = data['email']
-            
-        if 'role' in data:
-            user.role = data['role']
-        
-        db.session.commit()
-        return jsonify(user.to_dict()), 200
+        return Response.success(user.to_dict(), '用户信息更新成功')

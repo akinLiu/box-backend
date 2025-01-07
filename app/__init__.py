@@ -1,9 +1,11 @@
+"""Flask 应用工厂模块"""
 from flask import Flask
+from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager
 from config import config
+from app.utils.jwt_handlers import register_jwt_error_handlers
 
 # 创建扩展实例
 db = SQLAlchemy()
@@ -11,23 +13,28 @@ migrate = Migrate()
 jwt = JWTManager()
 
 def create_app(config_name='default'):
-    app = Flask(__name__, instance_relative_config=True)
+    """应用工厂函数
+    
+    Args:
+        config_name: 配置名称，默认为 'default'
+        
+    Returns:
+        Flask 应用实例
+    """
+    app = Flask(__name__)
     
     # 加载配置
     app.config.from_object(config[config_name])
-    app.config.from_pyfile('config.py', silent=True)
-    
-    # 配置 SQLAlchemy 2.0
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-    }
+    config[config_name].init_app(app)
     
     # 初始化扩展
     CORS(app)
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    
+    # 注册 JWT 错误处理器
+    register_jwt_error_handlers(jwt)
     
     # 注册蓝图
     from .api import api_bp
