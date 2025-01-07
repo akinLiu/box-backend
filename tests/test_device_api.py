@@ -3,12 +3,22 @@ import pytest
 from app.models.device import Device, DeviceUserAssociation
 from app.models.base import db
 
+def clean_device_data(app, device_name):
+    """清理设备相关数据"""
+    with app.app_context():
+        device = Device.query.filter_by(name=device_name).first()
+        if device:
+            # 先删除关联记录
+            DeviceUserAssociation.query.filter_by(device_id=device.id).delete()
+            db.session.commit()
+            # 再删除设备
+            Device.query.filter_by(id=device.id).delete()
+            db.session.commit()
+
 def test_create_device(client, admin_token):
     """测试创建设备"""
     # 清理测试数据
-    with client.application.app_context():
-        Device.query.filter_by(name='test_device').delete()
-        db.session.commit()
+    clean_device_data(client.application, 'test_device')
 
     # 创建设备
     response = client.post(
@@ -46,11 +56,10 @@ def test_create_device(client, admin_token):
 def test_get_devices(client, admin_token, normal_user_token):
     """测试获取设备列表"""
     # 清理测试数据
-    with client.application.app_context():
-        Device.query.filter_by(name='test_device').delete()
-        db.session.commit()
+    clean_device_data(client.application, 'test_device')
 
-        # 创建测试设备
+    # 创建测试设备
+    with client.application.app_context():
         device = Device(
             name='test_device',
             ip_address='192.168.1.100',
@@ -87,11 +96,10 @@ def test_get_devices(client, admin_token, normal_user_token):
 def test_update_device(client, admin_token):
     """测试更新设备"""
     # 清理测试数据
-    with client.application.app_context():
-        Device.query.filter_by(name='test_device').delete()
-        db.session.commit()
+    clean_device_data(client.application, 'test_device')
 
-        # 创建测试设备
+    # 创建测试设备
+    with client.application.app_context():
         device = Device(
             name='test_device',
             ip_address='192.168.1.100',
@@ -133,12 +141,10 @@ def test_update_device(client, admin_token):
 def test_authorize_device(client, admin_token, normal_user):
     """测试授权设备"""
     # 清理测试数据
-    with client.application.app_context():
-        Device.query.filter_by(name='test_device').delete()
-        DeviceUserAssociation.query.delete()
-        db.session.commit()
+    clean_device_data(client.application, 'test_device')
 
-        # 创建测试设备
+    # 创建测试设备
+    with client.application.app_context():
         device = Device(
             name='test_device',
             ip_address='192.168.1.100',

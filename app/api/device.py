@@ -71,9 +71,9 @@ def authorize_device(device_id):
     
     return Response.success(None, '设备授权成功')
 
-@device_bp.route('/<int:device_id>/authorize/batch', methods=['POST'])
+@device_bp.route('/batch_authorize', methods=['POST'])
 @jwt_required()
-def batch_authorize_by_tags(device_id):
+def batch_authorize_by_tags():
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user or current_user.role != 'admin':
         return Response.forbidden()

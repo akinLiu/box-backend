@@ -2,6 +2,7 @@
 import pytest
 from flask_jwt_extended import create_access_token
 from app.models.user import User
+from app.models.device import DeviceUserAssociation
 from app.models.base import db
 
 @pytest.fixture(scope='session')
@@ -82,6 +83,11 @@ def clean_users(app):
     """清理测试用户数据（每个测试前）"""
     yield
     with app.app_context():
-        # 只清理测试用户数据，不删除表结构
+        # 先删除关联记录
+        test_users = User.query.filter(User.username != 'admin').all()
+        for user in test_users:
+            DeviceUserAssociation.query.filter_by(user_id=user.id).delete()
+        db.session.commit()
+        # 再删除用户
         User.query.filter(User.username != 'admin').delete()
         db.session.commit()
