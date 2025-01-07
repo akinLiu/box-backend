@@ -8,9 +8,14 @@ from app.services.device_service import DeviceService
 
 device_bp = Blueprint('device', __name__, url_prefix='/devices')
 
+
 @device_bp.route('', methods=['POST'])
 @jwt_required()
 def create_device():
+    """
+    创建设备
+    :return:
+    """
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user or current_user.role != 'admin':
         return Response.forbidden()
@@ -22,9 +27,14 @@ def create_device():
     device = DeviceService.create_device(data)
     return Response.success(device.to_dict(), '设备创建成功')
 
+
 @device_bp.route('', methods=['GET'])
 @jwt_required()
 def get_devices():
+    """
+    获取设备列表
+    :return:
+    """
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user:
         return Response.not_found('用户不存在')
@@ -32,9 +42,15 @@ def get_devices():
     devices = DeviceService.get_devices(current_user.id, current_user.role == 'admin')
     return Response.success([device.to_dict() for device in devices])
 
+
 @device_bp.route('/<int:device_id>', methods=['PUT'])
 @jwt_required()
 def update_device(device_id):
+    """
+    更新设备
+    :param device_id:
+    :return:
+    """
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user or current_user.role != 'admin':
         return Response.forbidden()
@@ -49,9 +65,15 @@ def update_device(device_id):
     
     return Response.success(device.to_dict(), '设备更新成功')
 
+
 @device_bp.route('/<int:device_id>/authorize', methods=['POST'])
 @jwt_required()
 def authorize_device(device_id):
+    """
+    授权设备给用户
+    :param device_id:
+    :return:
+    """
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user or current_user.role != 'admin':
         return Response.forbidden()
@@ -71,9 +93,14 @@ def authorize_device(device_id):
     
     return Response.success(None, '设备授权成功')
 
+
 @device_bp.route('/batch_authorize', methods=['POST'])
 @jwt_required()
 def batch_authorize_by_tags():
+    """
+    根据标签批量授权设备
+    :return:
+    """
     current_user = db.session.get(User, get_jwt_identity())
     if not current_user or current_user.role != 'admin':
         return Response.forbidden()

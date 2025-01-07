@@ -9,6 +9,10 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
+    """
+    注册用户
+    :return:
+    """
     data = request.get_json()
     if not data or not all(k in data for k in ('username', 'email', 'password')):
         return Response.validation_error('缺少必要字段')
@@ -27,6 +31,10 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    """
+    用户登录
+    :return:
+    """
     data = request.get_json()
     if not data or not all(k in data for k in ('username', 'password')):
         return Response.validation_error('缺少必要字段')
@@ -44,6 +52,10 @@ def login():
 @auth_bp.route('/users', methods=['GET'])
 @jwt_required()
 def get_users():
+    """
+    获取用户列表
+    :return:
+    """
     user_id = get_jwt_identity()
     print(f"JWT identity: {user_id}, type: {type(user_id)}")
     
@@ -68,6 +80,11 @@ def get_users():
 @auth_bp.route('/users/<int:user_id>', methods=['PUT'])
 @jwt_required()
 def update_user(user_id):
+    """
+    更新用户信息
+    :param user_id:
+    :return:
+    """
     user_id_str = get_jwt_identity()
     print(f"JWT identity: {user_id_str}, type: {type(user_id_str)}")
     
