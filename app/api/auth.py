@@ -81,10 +81,26 @@ def update_user(user_id):
         if not data:
             return jsonify({'message': 'No input data provided'}), 400
         
+        # 检查用户名是否已存在
         if 'username' in data:
+            existing_user = User.query.filter(
+                User.username == data['username'],
+                User.id != user_id
+            ).first()
+            if existing_user:
+                return jsonify({'message': 'Username already exists'}), 400
             user.username = data['username']
+            
+        # 检查邮箱是否已存在
         if 'email' in data:
+            existing_user = User.query.filter(
+                User.email == data['email'],
+                User.id != user_id
+            ).first()
+            if existing_user:
+                return jsonify({'message': 'Email already exists'}), 400
             user.email = data['email']
+            
         if 'role' in data:
             user.role = data['role']
         

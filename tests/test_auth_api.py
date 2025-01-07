@@ -103,14 +103,17 @@ def test_get_users(client, admin_token):
 
 def test_update_user(client, admin_token):
     """测试更新用户信息"""
-    # 确保测试用户存在
-    user_id = None
+    # 清理测试数据
     with client.application.app_context():
-        user = User.query.filter_by(username='testuser').first()
-        if not user:
-            user = User(username='testuser', email='test@example.com', role='user')
-            user.set_password('password123')
-            user.save()
+        User.query.filter(User.username.in_(['testuser', 'updated_user'])).delete()
+        User.query.filter(User.email.in_(['test@example.com', 'updated@example.com'])).delete()
+        db.session.commit()
+        
+    # 创建测试用户
+    with client.application.app_context():
+        user = User(username='testuser', email='test@example.com', role='user')
+        user.set_password('password123')
+        user.save()
         user_id = user.id
 
     # 测试管理员更新用户信息
@@ -133,8 +136,6 @@ def test_update_user(client, admin_token):
         assert updated_user.email == 'updated@example.com'
         assert updated_user.role == 'admin'
 
-        # 清理：恢复用户原始状态
-        updated_user.username = 'testuser'
-        updated_user.email = 'test@example.com'
-        updated_user.role = 'user'
+        # 清理测试数据
+        db.session.delete(updated_user)
         db.session.commit()
