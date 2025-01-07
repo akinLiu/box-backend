@@ -61,7 +61,6 @@ htmlcov/
 .ipynb_checkpoints
 
 # Local development configuration
-config.py
 local_settings.py
 
 # Migration files

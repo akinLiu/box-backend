@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.base import db
@@ -35,7 +35,7 @@ def login():
     
     user = User.query.filter_by(username=data['username']).first()
     if user and user.check_password(data['password']):
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=str(user.id))
         return jsonify({
             'token': access_token,
             'user': user.to_dict()
@@ -46,50 +46,47 @@ def login():
 @auth_bp.route('/users', methods=['GET'])
 @jwt_required()
 def get_users():
-    current_user = User.query.get(get_jwt_identity())
-    if not current_user or current_user.role != 'admin':
-        return jsonify({'message': 'Permission denied'}), 403
+    user_id = get_jwt_identity()
+    print(f"JWT identity: {user_id}, type: {type(user_id)}")
     
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users]), 200
+    with current_app.app_context():
+        current_user = db.session.get(User, int(user_id))
+        print(f"Current user: {current_user}, role: {current_user.role if current_user else None}")
+        
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'message': 'Permission denied'}), 403
+        
+        result = db.session.execute(db.select(User))
+        users = result.scalars().all()
+        return jsonify([user.to_dict() for user in users]), 200
 
 @auth_bp.route('/users/<int:user_id>', methods=['PUT'])
 @jwt_required()
 def update_user(user_id):
-    current_user = User.query.get(get_jwt_identity())
-    if not current_user or current_user.role != 'admin':
-        return jsonify({'message': 'Permission denied'}), 403
+    user_id_str = get_jwt_identity()
+    print(f"JWT identity: {user_id_str}, type: {type(user_id_str)}")
     
-    user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    if not data:
-        return jsonify({'message': 'No input data provided'}), 422
-    
-    if 'username' in data:
-        # 检查用户名是否已存在
-        existing = User.query.filter(
-            User.username == data['username'],
-            User.id != user_id
-        ).first()
-        if existing:
-            return jsonify({'message': 'Username already exists'}), 400
-        user.username = data['username']
+    with current_app.app_context():
+        current_user = db.session.get(User, int(user_id_str))
+        print(f"Current user: {current_user}, role: {current_user.role if current_user else None}")
         
-    if 'email' in data:
-        # 检查邮箱是否已存在
-        existing = User.query.filter(
-            User.email == data['email'],
-            User.id != user_id
-        ).first()
-        if existing:
-            return jsonify({'message': 'Email already exists'}), 400
-        user.email = data['email']
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'message': 'Permission denied'}), 403
         
-    if 'password' in data:
-        user.set_password(data['password'])
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
         
-    if 'role' in data:
-        user.role = data['role']
-    
-    user.save()
-    return jsonify(user.to_dict()), 200
+        data = request.get_json()
+        if not data:
+            return jsonify({'message': 'No input data provided'}), 400
+        
+        if 'username' in data:
+            user.username = data['username']
+        if 'email' in data:
+            user.email = data['email']
+        if 'role' in data:
+            user.role = data['role']
+        
+        db.session.commit()
+        return jsonify(user.to_dict()), 200
