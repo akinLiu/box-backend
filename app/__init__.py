@@ -28,7 +28,12 @@ def create_app(config_name='default'):
     config[config_name].init_app(app)
     
     # 初始化扩展
-    CORS(app)
+    CORS(app, 
+         resources={r"/api/*": {"origins": "*"}},
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
@@ -38,7 +43,12 @@ def create_app(config_name='default'):
     
     # 注册蓝图
     from .api import api_bp
+    from app.api.auth import auth_bp
+    from app.api.dashboard import dashboard_bp
+    
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(auth_bp, url_prefix='/api')
+    app.register_blueprint(dashboard_bp, url_prefix='/api')
     
     # 注册命令
     from .commands import register_commands
