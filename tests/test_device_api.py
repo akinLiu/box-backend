@@ -1,6 +1,8 @@
 """设备 API 测试模块"""
 import pytest
+from flask_jwt_extended import create_access_token
 from app.models.device import Device, DeviceUserAssociation
+from app.models.user import User
 from app.models.base import db
 
 def clean_device_data(app, device_name):
@@ -79,9 +81,9 @@ def test_get_devices(client, admin_token, normal_user_token):
     assert response.status_code == 200
     data = response.get_json()
     assert data['code'] == 200
-    assert len(data['data']) >= 1
-    assert any(d['name'] == 'test_device' for d in data['data'])
-
+    assert len(data['data']['items']) >= 1
+    assert any(d['name'] == 'test_device' for d in data['data']['items'])
+    
     # 普通用户获取设备列表
     response = client.get(
         '/api/devices',
@@ -91,7 +93,7 @@ def test_get_devices(client, admin_token, normal_user_token):
     assert response.status_code == 200
     data = response.get_json()
     assert data['code'] == 200
-    assert len(data['data']) == 0
+    assert len(data['data']['items']) == 0
 
 def test_update_device(client, admin_token):
     """测试更新设备"""
@@ -190,7 +192,7 @@ def test_batch_authorize_by_tags(client, admin_token, normal_user):
             )
             db.session.add(device)
         db.session.commit()
-
+        
     # 批量授权设备
     response = client.post(
         '/api/devices/batch_authorize',
@@ -205,3 +207,238 @@ def test_batch_authorize_by_tags(client, admin_token, normal_user):
     assert response.status_code == 200
     data = response.get_json()
     assert data['code'] == 200
+
+def test_search_devices_by_name(client, admin_token):
+    """测试按名称搜索设备"""
+    # 清理并创建测试设备
+    with client.application.app_context():
+        Device.query.delete()
+        DeviceUserAssociation.query.delete()
+        db.session.commit()
+
+        # 创建测试设备
+        devices = [
+            Device(
+                name='测试设备1',
+                ip_address='192.168.1.1',
+                mac_address='00:11:22:33:44:55',
+                status='online',
+                tags='dp,test'
+            ),
+            Device(
+                name='测试设备2',
+                ip_address='192.168.1.2',
+                mac_address='00:11:22:33:44:66',
+                status='offline',
+                tags='dp'
+            ),
+            Device(
+                name='生产设备1',
+                ip_address='192.168.1.3',
+                mac_address='AA:BB:CC:DD:EE:FF',
+                status='online',
+                tags='prod'
+            )
+        ]
+        for device in devices:
+            db.session.add(device)
+        db.session.commit()
+
+    # 精确匹配
+    response = client.get(
+        '/api/devices?name=测试设备1',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 1
+    assert data['data']['items'][0]['name'] == '测试设备1'
+
+    # 模糊匹配
+    response = client.get(
+        '/api/devices?name=测试',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 2
+
+def test_search_devices_by_status(client, admin_token):
+    """测试按状态搜索设备"""
+    # 使用相同的测试数据
+    with client.application.app_context():
+        Device.query.delete()
+        DeviceUserAssociation.query.delete()
+        db.session.commit()
+
+        devices = [
+            Device(
+                name='测试设备1',
+                ip_address='192.168.1.1',
+                mac_address='00:11:22:33:44:55',
+                status='online',
+                tags='dp,test'
+            ),
+            Device(
+                name='测试设备2',
+                ip_address='192.168.1.2',
+                mac_address='00:11:22:33:44:66',
+                status='offline',
+                tags='dp'
+            ),
+            Device(
+                name='生产设备1',
+                ip_address='192.168.1.3',
+                mac_address='AA:BB:CC:DD:EE:FF',
+                status='online',
+                tags='prod'
+            )
+        ]
+        for device in devices:
+            db.session.add(device)
+        db.session.commit()
+
+    # 测试在线状态
+    response = client.get(
+        '/api/devices?status=online',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 2
+
+    # 测试离线状态
+    response = client.get(
+        '/api/devices?status=offline',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 1
+
+def test_search_devices_by_tags(client, admin_token):
+    """测试按标签搜索设备"""
+    # 使用相同的测试数据
+    with client.application.app_context():
+        Device.query.delete()
+        DeviceUserAssociation.query.delete()
+        db.session.commit()
+
+        devices = [
+            Device(
+                name='测试设备1',
+                ip_address='192.168.1.1',
+                mac_address='00:11:22:33:44:55',
+                status='online',
+                tags='dp,test'
+            ),
+            Device(
+                name='测试设备2',
+                ip_address='192.168.1.2',
+                mac_address='00:11:22:33:44:66',
+                status='offline',
+                tags='dp'
+            ),
+            Device(
+                name='生产设备1',
+                ip_address='192.168.1.3',
+                mac_address='AA:BB:CC:DD:EE:FF',
+                status='online',
+                tags='prod'
+            )
+        ]
+        for device in devices:
+            db.session.add(device)
+        db.session.commit()
+
+    # 单个标签搜索
+    response = client.get(
+        '/api/devices?tags[]=dp',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 2
+
+    # 多个标签搜索
+    response = client.get(
+        '/api/devices?tags[]=dp&tags[]=test',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 2
+
+def test_search_devices_combined(client, admin_token):
+    """测试组合条件搜索设备"""
+    # 使用相同的测试数据
+    with client.application.app_context():
+        Device.query.delete()
+        DeviceUserAssociation.query.delete()
+        db.session.commit()
+
+        devices = [
+            Device(
+                name='测试设备1',
+                ip_address='192.168.1.1',
+                mac_address='00:11:22:33:44:55',
+                status='online',
+                tags='dp,test'
+            ),
+            Device(
+                name='测试设备2',
+                ip_address='192.168.1.2',
+                mac_address='00:11:22:33:44:66',
+                status='offline',
+                tags='dp'
+            ),
+            Device(
+                name='生产设备1',
+                ip_address='192.168.1.3',
+                mac_address='AA:BB:CC:DD:EE:FF',
+                status='online',
+                tags='prod'
+            )
+        ]
+        for device in devices:
+            db.session.add(device)
+        db.session.commit()
+
+    # 名称 + 状态
+    response = client.get(
+        '/api/devices?name=测试&status=online',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 1
+    assert data['data']['items'][0]['name'] == '测试设备1'
+
+    # 标签 + 状态
+    response = client.get(
+        '/api/devices?tags[]=dp&status=offline',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 1
+    assert data['data']['items'][0]['name'] == '测试设备2'
+
+    # 名称 + 标签 + 状态
+    response = client.get(
+        '/api/devices?name=测试&tags[]=dp&status=online',
+        headers={'Authorization': f'Bearer {admin_token}'}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['code'] == 200
+    assert len(data['data']['items']) == 1
+    assert data['data']['items'][0]['name'] == '测试设备1'
